@@ -1,0 +1,604 @@
+<title>SmartSpotter - AI Personal Trainer Prototype</title><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartSpotter - AI Personal Trainer Prototype</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/3.18.0/tf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/3.18.0/tf-converter.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1635989137/pose.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils@0.6.1629159505/control_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            font-weight: 700;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .app-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 1200px;
+            width: 100%;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .camera-section {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .video-container {
+            flex: 1;
+            min-width: 300px;
+            position: relative;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+        }
+
+        .video-canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .feedback-panel {
+            flex: 1;
+            min-width: 300px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .feedback-panel h3 {
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            color: #FFD700;
+        }
+
+        .form-score {
+            font-size: 3em;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 20px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .form-feedback {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .feedback-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .status-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 10px;
+            display: inline-block;
+        }
+
+        .good { background: #4CAF50; }
+        .warning { background: #FF9800; }
+        .error { background: #F44336; }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #FFD700;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+
+        .rep-counter {
+            font-size: 4em;
+            font-weight: bold;
+            text-align: center;
+            color: #4CAF50;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        @media (max-width: 768px) {
+            .camera-section {
+                flex-direction: column;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .app-container {
+                padding: 20px;
+            }
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #FFD700;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>SmartSpotter</h1>
+        <p>AI-Powered Personal Trainer - Prototype</p>
+    </div>
+
+    <div class="app-container">
+        <div class="controls">
+            <button class="btn btn-primary" id="startBtn">Start Camera</button>
+            <button class="btn btn-secondary" id="resetBtn">Reset Stats</button>
+        </div>
+
+        <div id="loadingSection" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Loading AI Models...</p>
+        </div>
+
+        <div class="camera-section" id="mainSection" style="display: none;">
+            <div class="video-container">
+                <video id="videoElement" class="video-canvas" autoplay muted playsinline></video>
+                <canvas id="canvasElement" class="video-canvas" style="position: absolute; top: 0; left: 0;"></canvas>
+            </div>
+
+            <div class="feedback-panel">
+                <h3>Real-Time Analysis</h3>
+                
+                <div class="rep-counter" id="repCounter">0</div>
+                <p style="text-align: center; margin-bottom: 20px;">Squats Completed</p>
+
+                <div class="form-score" id="formScore">
+                    <div style="font-size: 0.4em; margin-bottom: 10px;">Form Score</div>
+                    85%
+                </div>
+
+                <div class="form-feedback">
+                    <div class="feedback-item">
+                        <span class="status-icon good" id="depthIcon"></span>
+                        <span id="depthFeedback">Analyzing squat depth...</span>
+                    </div>
+                    <div class="feedback-item">
+                        <span class="status-icon good" id="kneeIcon"></span>
+                        <span id="kneeFeedback">Checking knee alignment...</span>
+                    </div>
+                    <div class="feedback-item">
+                        <span class="status-icon good" id="backIcon"></span>
+                        <span id="backFeedback">Monitoring back posture...</span>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="avgDepth">--</div>
+                        <div class="stat-label">Avg Depth</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="formAccuracy">--</div>
+                        <div class="stat-label">Accuracy</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalTime">0s</div>
+                        <div class="stat-label">Session Time</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class SquatAnalyzer {
+            constructor() {
+                this.pose = null;
+                this.camera = null;
+                this.isAnalyzing = false;
+                this.repCount = 0;
+                this.isSquatting = false;
+                this.squatDepth = 0;
+                this.startTime = null;
+                this.formScores = [];
+                this.lastSquatState = 'up';
+                
+                this.initElements();
+                this.setupEventListeners();
+            }
+
+            initElements() {
+                this.videoElement = document.getElementById('videoElement');
+                this.canvasElement = document.getElementById('canvasElement');
+                this.ctx = this.canvasElement.getContext('2d');
+                this.startBtn = document.getElementById('startBtn');
+                this.resetBtn = document.getElementById('resetBtn');
+                this.loadingSection = document.getElementById('loadingSection');
+                this.mainSection = document.getElementById('mainSection');
+            }
+
+            setupEventListeners() {
+                this.startBtn.addEventListener('click', () => this.startAnalysis());
+                this.resetBtn.addEventListener('click', () => this.resetStats());
+            }
+
+            async startAnalysis() {
+                this.loadingSection.style.display = 'block';
+                this.startBtn.disabled = true;
+                this.startBtn.textContent = 'Loading...';
+
+                try {
+                    await this.initializePose();
+                    await this.startCamera();
+                    this.startTime = Date.now();
+                    this.startTimer();
+                    this.loadingSection.style.display = 'none';
+                    this.mainSection.style.display = 'flex';
+                    this.startBtn.textContent = 'Camera Active';
+                    this.isAnalyzing = true;
+                } catch (error) {
+                    console.error('Failed to start analysis:', error);
+                    alert('Failed to start camera. Please ensure camera permissions are enabled.');
+                    this.loadingSection.style.display = 'none';
+                    this.startBtn.disabled = false;
+                    this.startBtn.textContent = 'Start Camera';
+                }
+            }
+
+            async initializePose() {
+                // Note: In a real implementation, you would use MediaPipe Pose
+                // For this prototype, we'll simulate pose detection
+                this.pose = {
+                    onResults: (results) => this.onPoseResults(results)
+                };
+                
+                // Simulate loading time
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+
+            async startCamera() {
+                try {
+                    // Check if camera is available
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        throw new Error('Camera not supported in this browser');
+                    }
+
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { 
+                            width: { ideal: 640 },
+                            height: { ideal: 480 },
+                            facingMode: 'user' // Front camera
+                        } 
+                    });
+                    
+                    this.videoElement.srcObject = stream;
+                    
+                    return new Promise((resolve, reject) => {
+                        this.videoElement.onloadedmetadata = () => {
+                            this.canvasElement.width = this.videoElement.videoWidth || 640;
+                            this.canvasElement.height = this.videoElement.videoHeight || 480;
+                            
+                            // Start video playback
+                            this.videoElement.play().then(() => {
+                                this.startPoseDetection();
+                                resolve();
+                            }).catch(reject);
+                        };
+                        
+                        this.videoElement.onerror = () => {
+                            reject(new Error('Failed to load video'));
+                        };
+                    });
+                    
+                } catch (error) {
+                    console.error('Camera error:', error);
+                    
+                    // Show error message to user
+                    const errorDiv = document.createElement('div');
+                    errorDiv.innerHTML = `
+                        <div style="text-align: center; padding: 40px; background: rgba(244, 67, 54, 0.1); border-radius: 10px; margin: 20px 0;">
+                            <h3 style="color: #F44336; margin-bottom: 15px;">Camera Access Required</h3>
+                            <p style="margin-bottom: 15px;">To use SmartSpotter, please:</p>
+                            <ul style="text-align: left; max-width: 400px; margin: 0 auto;">
+                                <li>Click "Allow" when prompted for camera access</li>
+                                <li>Check that your camera isn't being used by another app</li>
+                                <li>Try refreshing the page</li>
+                                <li>Make sure you're using HTTPS (required for camera access)</li>
+                            </ul>
+                            <button class="btn btn-primary" onclick="location.reload()" style="margin-top: 20px;">Try Again</button>
+                        </div>
+                    `;
+                    
+                    this.loadingSection.innerHTML = '';
+                    this.loadingSection.appendChild(errorDiv);
+                    this.loadingSection.style.display = 'block';
+                    
+                    throw error;
+                }
+            }
+
+            startPoseDetection() {
+                const detectPose = () => {
+                    if (this.videoElement.readyState === 4) {
+                        // Draw video frame
+                        this.ctx.drawImage(this.videoElement, 0, 0);
+                        
+                        // Simulate pose detection and analysis
+                        this.simulatePoseAnalysis();
+                    }
+                    if (this.isAnalyzing) {
+                        requestAnimationFrame(detectPose);
+                    }
+                };
+                
+                this.isAnalyzing = true;
+                detectPose();
+            }
+
+            simulatePoseAnalysis() {
+                // Simulate realistic squat analysis
+                const time = Date.now();
+                const cycle = Math.sin(time * 0.002) * 0.5 + 0.5; // Simulate squat cycle
+                
+                // Simulate squat detection
+                const isDown = cycle < 0.3;
+                const currentState = isDown ? 'down' : 'up';
+                
+                if (this.lastSquatState === 'up' && currentState === 'down') {
+                    // Starting squat
+                    this.updateFeedback('depth', 'warning', 'Going down - maintain control');
+                } else if (this.lastSquatState === 'down' && currentState === 'up') {
+                    // Completing squat
+                    this.repCount++;
+                    this.updateRepCounter();
+                    this.updateFeedback('depth', 'good', 'Good rep! Drive through heels');
+                }
+                
+                this.lastSquatState = currentState;
+                
+                // Update form feedback with realistic variations
+                this.updateFormFeedback(cycle);
+                this.drawSkeletonOverlay(cycle);
+            }
+
+            updateFormFeedback(cycle) {
+                const depth = Math.floor((1 - cycle) * 100);
+                const kneeAlignment = 85 + Math.random() * 10;
+                const backPosture = 90 + Math.random() * 5;
+                
+                // Update depth feedback
+                if (cycle < 0.3) {
+                    this.updateFeedback('depth', 'good', `Great depth: ${depth}%`);
+                } else if (cycle < 0.7) {
+                    this.updateFeedback('depth', 'warning', 'Go deeper for full range');
+                } else {
+                    this.updateFeedback('depth', 'good', 'Return to starting position');
+                }
+                
+                // Update knee feedback
+                if (kneeAlignment > 80) {
+                    this.updateFeedback('knee', 'good', 'Knees tracking well');
+                } else {
+                    this.updateFeedback('knee', 'warning', 'Keep knees aligned over toes');
+                }
+                
+                // Update back feedback
+                if (backPosture > 85) {
+                    this.updateFeedback('back', 'good', 'Excellent posture');
+                } else {
+                    this.updateFeedback('back', 'error', 'Keep chest up, back straight');
+                }
+                
+                // Update stats
+                document.getElementById('avgDepth').textContent = `${Math.floor(depth)}%`;
+                document.getElementById('formAccuracy').textContent = `${Math.floor((kneeAlignment + backPosture) / 2)}%`;
+                
+                // Update form score
+                const overallScore = Math.floor((depth + kneeAlignment + backPosture) / 3);
+                document.getElementById('formScore').innerHTML = `
+                    <div style="font-size: 0.4em; margin-bottom: 10px;">Form Score</div>
+                    ${overallScore}%
+                `;
+            }
+
+            updateFeedback(type, status, message) {
+                const icon = document.getElementById(`${type}Icon`);
+                const feedback = document.getElementById(`${type}Feedback`);
+                
+                icon.className = `status-icon ${status}`;
+                feedback.textContent = message;
+            }
+
+            drawSkeletonOverlay(cycle) {
+                // Draw pose estimation overlay
+                this.ctx.strokeStyle = '#FFD700';
+                this.ctx.lineWidth = 3;
+                this.ctx.fillStyle = '#FFD700';
+                
+                const width = this.canvasElement.width;
+                const height = this.canvasElement.height;
+                
+                // Simulate key points for squat analysis
+                const hipY = height * 0.45 + cycle * 50;
+                const kneeY = height * 0.65 + cycle * 40;
+                const ankleY = height * 0.85;
+                
+                // Draw skeleton points
+                const points = [
+                    { x: width * 0.5, y: height * 0.25 }, // Head
+                    { x: width * 0.5, y: height * 0.35 }, // Neck
+                    { x: width * 0.5, y: hipY },          // Hip
+                    { x: width * 0.45, y: kneeY },        // Left knee
+                    { x: width * 0.55, y: kneeY },        // Right knee
+                    { x: width * 0.42, y: ankleY },       // Left ankle
+                    { x: width * 0.58, y: ankleY },       // Right ankle
+                ];
+                
+                // Draw points
+                points.forEach(point => {
+                    this.ctx.beginPath();
+                    this.ctx.arc(point.x, point.y, 6, 0, 2 * Math.PI);
+                    this.ctx.fill();
+                });
+                
+                // Draw connections
+                this.ctx.beginPath();
+                this.ctx.moveTo(points[0].x, points[0].y);
+                this.ctx.lineTo(points[1].x, points[1].y);
+                this.ctx.lineTo(points[2].x, points[2].y);
+                this.ctx.moveTo(points[2].x, points[2].y);
+                this.ctx.lineTo(points[3].x, points[3].y);
+                this.ctx.lineTo(points[5].x, points[5].y);
+                this.ctx.moveTo(points[2].x, points[2].y);
+                this.ctx.lineTo(points[4].x, points[4].y);
+                this.ctx.lineTo(points[6].x, points[6].y);
+                this.ctx.stroke();
+            }
+
+            updateRepCounter() {
+                document.getElementById('repCounter').textContent = this.repCount;
+            }
+
+            startTimer() {
+                setInterval(() => {
+                    if (this.startTime) {
+                        const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+                        document.getElementById('totalTime').textContent = `${elapsed}s`;
+                    }
+                }, 1000);
+            }
+
+            resetStats() {
+                this.repCount = 0;
+                this.startTime = Date.now();
+                this.formScores = [];
+                this.updateRepCounter();
+                document.getElementById('totalTime').textContent = '0s';
+                document.getElementById('avgDepth').textContent = '--';
+                document.getElementById('formAccuracy').textContent = '--';
+            }
+
+            onPoseResults(results) {
+                // This would handle real MediaPipe pose results
+                // For now, our simulation handles the analysis
+            }
+        }
+
+        // Initialize the app
+        const squatAnalyzer = new SquatAnalyzer();
+    </script>
+</body>
+</html>
